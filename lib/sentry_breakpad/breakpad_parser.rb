@@ -41,7 +41,6 @@ module SentryBreakpad
         'extra'      => extra,
         'level'      => 'fatal',
         'logger'     => 'breakpad',
-        'platform'   => 'c',
         'interfaces' => {
           'stacktrace' => {
             'frames' => @crashed_thread_stacktrace
