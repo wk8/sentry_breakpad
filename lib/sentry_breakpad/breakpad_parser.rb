@@ -47,7 +47,7 @@ module SentryBreakpad
       parse_lines(@breakpad_report_content.split("\n").reverse!)
     end
 
-    def parse_lines(lines)
+    def parse_lines(lines) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/AbcSize, Metrics/MethodLength, Metrics/LineLength
       until lines.empty?
         case lines.last
         when /^Operating system:/
@@ -59,7 +59,7 @@ module SentryBreakpad
         when /^Crash address:/
           parse_crash_address(lines.pop)
         when /^Thread ([0-9]+) \(crashed\)/
-          parse_crashed_thread_stacktrace(lines, $1.to_i)
+          parse_crashed_thread_stacktrace(lines, Regexp.last_match[1].to_i)
         when /^Loaded modules:/
           parse_loaded_modules(lines)
         else
@@ -108,12 +108,12 @@ module SentryBreakpad
     def parse_crash_reason(line)
       reason = remove_prefix(line, 'Crash reason:')
 
-      if @message.nil?
-        @message = reason
-      else
-        # we parse the crashed thread first
-        @message = "#{reason} at #{@message}"
-      end
+      @message = if @message.nil?
+                   reason
+                 else
+                   # we parse the crashed thread first
+                   "#{reason} at #{@message}"
+                 end
     end
 
     # Parses a single line like
@@ -129,8 +129,9 @@ module SentryBreakpad
       line.strip
     end
 
-    BACKTRACE_LINE_REGEX = /^\s*([0-9]+)\s+(.*)\s+(?:\[(([^ ]+)\s+:\s+([0-9]+))\s+\+\s+0x[0-9a-f]+\]|\+\s+0x[0-9a-f]+)\s*$/
+    BACKTRACE_LINE_REGEX = /^\s*([0-9]+)\s+(.*)\s+(?:\[(([^ ]+)\s+:\s+([0-9]+))\s+\+\s+0x[0-9a-f]+\]|\+\s+0x[0-9a-f]+)\s*$/ # rubocop:disable Metrics/LineLength
 
+    # rubocop:disable Metrics/LineLength
     # Parses something of the form
     # Thread 0 (crashed)
     #  0  ETClient.exe!QString::~QString() [qstring.h : 992 + 0xa]
@@ -180,6 +181,7 @@ module SentryBreakpad
     # 14  ETClient.exe!WinMain + 0x21358
     #     eip = 0x015bb068   esp = 0x0018d690   ebp = 0x0018d7f8
     #     Found by: call frame info
+    # rubocop:enable Metrics/LineLength
     def parse_crashed_thread_stacktrace(lines, thread_id)
       # remove the 1st line
       lines.pop
