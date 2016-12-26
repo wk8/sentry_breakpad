@@ -198,7 +198,10 @@ module SentryBreakpad
     end
 
     def parse_crashed_thread_stacktrace_line(match)
-      frame_nb, function, filename, lineno = match[1], match[2], match[4] || 'unknown', match[5]
+      frame_nb = match[1]
+      function = match[2]
+      filename = match[4] || 'unknown'
+      lineno   = match[5]
 
       parse_culprit_and_message(function, match[3]) if frame_nb.to_i == 0
 
