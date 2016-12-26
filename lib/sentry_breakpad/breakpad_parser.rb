@@ -1,15 +1,14 @@
 require 'raven'
 
 module SentryBreakpad
-  # parses a breakpad report
-  class BreakpadParser # rubocop:disable Metrics/ClassLength
+  # parses a breakpad report and turns it into a Raven event
+  class BreakpadParser # rubocop:disable Metrics/ClassLength # TODO wkpo needed?
     def self.from_file(file_path)
       new(File.open(file_path).read)
     end
 
     def initialize(breakpad_report_content)
       @breakpad_report_content = breakpad_report_content
-      @parsed = false
 
       @message = nil
       @tags = {}
@@ -17,16 +16,20 @@ module SentryBreakpad
       @culprit = nil
       @modules = {}
       @extra = {}
+
+      parse!
     end
 
+    # TODO wkpo unit test on the extra_info thing
     def raven_event(extra_info = {})
-      hash = deep_merge(raven_event_hash(include_whole_report), extra_info)
-      Raven::Event.new(hash)
+      hash = deep_merge(raven_event_hash, extra_info)
+      Raven::Event.new(hash).tap do |event|
+        event[:stacktrace] = { frames: @crashed_thread_stacktrace }
+      end
     end
 
+    # TODO wkpo private
     def raven_event_hash
-      parse
-
       {
         'message'    => @message,
         'tags'       => @tags,
@@ -34,20 +37,13 @@ module SentryBreakpad
         'modules'    => @modules,
         'extra'      => @extra,
         'level'      => 'fatal',
-        'logger'     => 'breakpad',
-        'interfaces' => {
-          'stacktrace' => {
-            'frames' => @crashed_thread_stacktrace
-          }
-        }
+        'logger'     => 'breakpad'
       }
     end
 
   private
 
-    def parse
-      return if @parsed
-
+    def parse!
       parse_lines(@breakpad_report_content.split("\n").reverse!)
     end
 

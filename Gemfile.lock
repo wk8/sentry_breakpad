@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    sentry_breakpad (0.1.9)
+    sentry_breakpad (0.1.10)
       sentry-raven (~> 2.2.0)
 
 GEM
