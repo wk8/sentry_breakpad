@@ -2,7 +2,7 @@ require 'raven'
 
 module SentryBreakpad
   # parses a breakpad report
-  class BreakpadParser
+  class BreakpadParser # rubocop:disable Metrics/ClassLength
     def self.from_file(file_path)
       new(File.open(file_path).read)
     end
@@ -19,26 +19,20 @@ module SentryBreakpad
       @extra = {}
     end
 
-    def raven_event(extra_info = {}, include_whole_report = true)
+    def raven_event(extra_info = {})
       hash = deep_merge(raven_event_hash(include_whole_report), extra_info)
       Raven::Event.new(hash)
     end
 
-    def raven_event_hash(include_whole_report = true)
+    def raven_event_hash
       parse
-
-      extra = if include_whole_report
-        @extra.merge({'raw_breakpad_report' => @breakpad_report_content})
-      else
-        @extra
-      end
 
       {
         'message'    => @message,
         'tags'       => @tags,
         'culprit'    => @culprit,
         'modules'    => @modules,
-        'extra'      => extra,
+        'extra'      => @extra,
         'level'      => 'fatal',
         'logger'     => 'breakpad',
         'interfaces' => {

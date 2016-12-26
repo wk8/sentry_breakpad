@@ -1,3 +1,4 @@
+# TODO wkpo support at least back to ruby 1.9, et adder le badge travis to the README
 language: ruby
 rvm:
   - 2.2.2
