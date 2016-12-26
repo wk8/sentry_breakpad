@@ -4,7 +4,7 @@ module SentryBreakpad
   # parses a breakpad report and turns it into a Raven event
   class BreakpadParser # rubocop:disable Metrics/ClassLength
     def self.from_file(file_path)
-      new(File.open(file_path).read)
+      new(File.read(file_path))
     end
 
     def initialize(breakpad_report_content)
