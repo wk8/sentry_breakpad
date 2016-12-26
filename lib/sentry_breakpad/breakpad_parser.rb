@@ -34,13 +34,13 @@ module SentryBreakpad
 
     def raven_event_base_hash
       {
-        'message'    => @message,
-        'tags'       => @tags,
-        'culprit'    => @culprit,
-        'modules'    => @modules,
-        'extra'      => @extra,
-        'level'      => 'fatal',
-        'logger'     => 'breakpad'
+        'message' => @message,
+        'tags'    => @tags,
+        'culprit' => @culprit,
+        'modules' => @modules,
+        'extra'   => @extra,
+        'level'   => 'fatal',
+        'logger'  => 'breakpad'
       }
     end
 
