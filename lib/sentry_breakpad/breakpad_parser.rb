@@ -188,23 +188,24 @@ module SentryBreakpad
 
       stacktrace = []
       process_matching_lines(lines, BACKTRACE_LINE_REGEX) do |match|
-        frame_nb, function, filename, lineno = match[1], match[2], match[4] || 'unknown', match[5]
-
-        frame = {
-          'filename' => filename,
-          'function' => function
-        }
-        frame['lineno'] = lineno.to_i if lineno
-
-        stacktrace << frame
-
-        parse_culprit_and_message(function, match[3]) if frame_nb.to_i == 0
+        stacktrace << parse_crashed_thread_stacktrace_line(match)
       end
 
       # sentry wants their stacktrace with the oldest frame first
       @crashed_thread_stacktrace = stacktrace.reverse
 
       @extra[:crashed_thread_id] = thread_id
+    end
+
+    def parse_crashed_thread_stacktrace_line(match)
+      frame_nb, function, filename, lineno = match[1], match[2], match[4] || 'unknown', match[5]
+
+      parse_culprit_and_message(function, match[3]) if frame_nb.to_i == 0
+
+      {
+        'filename' => filename,
+        'function' => function
+      }.tap { |frame| frame['lineno'] = lineno.to_i if lineno }
     end
 
     def parse_culprit_and_message(function, file_name_and_lineno)
