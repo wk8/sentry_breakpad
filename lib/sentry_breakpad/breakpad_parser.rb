@@ -24,7 +24,9 @@ module SentryBreakpad
     def raven_event(extra_info = {})
       hash = deep_merge(raven_event_base_hash, extra_info)
       Raven::Event.new(hash).tap do |event|
-        event[:stacktrace] = { frames: @crashed_thread_stacktrace }
+        unless @crashed_thread_stacktrace.empty?
+          event[:stacktrace] = { frames: @crashed_thread_stacktrace }
+        end
       end
     end
 
