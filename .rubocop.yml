@@ -12,3 +12,6 @@ Documentation:
 
 Style/AccessModifierIndentation:
   EnforcedStyle: outdent
+
+Style/ParallelAssignment:
+  Enabled: false

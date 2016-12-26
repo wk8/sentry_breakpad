@@ -188,10 +188,7 @@ module SentryBreakpad
 
       stacktrace = []
       process_matching_lines(lines, BACKTRACE_LINE_REGEX) do |match|
-        frame_nb = match[1]
-        function = match[2]
-        filename = match[4] || 'unknown'
-        lineno   = match[5]
+        frame_nb, function, filename, lineno = match[1], match[2], match[4] || 'unknown', match[5]
 
         frame = {
           'filename' => filename,
@@ -201,19 +198,7 @@ module SentryBreakpad
 
         stacktrace << frame
 
-        if frame_nb.to_i == 0
-          @culprit = function
-
-          message_tail = function
-          message_tail += " (#{match[3]})" if match[3]
-
-          if @message.nil?
-            @message = message_tail
-          else
-            # already parsed the crash reason
-            @message += " at #{message_tail}"
-          end
-        end
+        parse_culprit_and_message(function, match[3]) if frame_nb.to_i == 0
       end
 
       # sentry wants their stacktrace with the oldest frame first
@@ -222,8 +207,23 @@ module SentryBreakpad
       @extra[:crashed_thread_id] = thread_id
     end
 
+    def parse_culprit_and_message(function, file_name_and_lineno)
+      @culprit = function
+
+      message_tail = function
+      message_tail += " (#{file_name_and_lineno})" if file_name_and_lineno
+
+      if @message.nil?
+        @message = message_tail
+      else
+        # already parsed the crash reason
+        @message += " at #{message_tail}"
+      end
+    end
+
     MODULE_LINE_REGEX = /0x[0-9a-f]+\s+-\s+0x[0-9a-f]+\s+([^ ]+)\s+([^ ]+)/
 
+    # rubocop:disable Metrics/LineLength
     # Parses something of the form
     # Loaded modules:
     # 0x00d70000 - 0x01b39fff  ETClient.exe  ???  (main)
@@ -278,6 +278,7 @@ module SentryBreakpad
     # 0x76f90000 - 0x76feffff  imm32.dll  6.1.7601.17514
     # 0x76ff0000 - 0x77016fff  cfgmgr32.dll  6.1.7601.17621
     # 0x77420000 - 0x7759ffff  ntdll.dll  6.1.7601.19110  (WARNING: No symbols, wntdll.pdb, 992AA396746C4D548F7F497DD63B4EEC2)
+    # rubocop:enable Metrics/LineLength
     def parse_loaded_modules(lines)
       # remove the 1st line
       lines.pop
@@ -290,7 +291,7 @@ module SentryBreakpad
       end
     end
 
-    def process_matching_lines(lines, regex, &blk)
+    def process_matching_lines(lines, regex, &_blk)
       loop do
         line = lines.pop
         line.strip! if line
@@ -306,12 +307,12 @@ module SentryBreakpad
     # wish ActiveSupport was around...
     def deep_merge(hash1, hash2)
       hash2.each do |key, value|
-        if hash1.key?(value) && hash1[key].is_a?(Hash) && value.is_a?(Hash)
-          hash1[key] = deep_merge(hash1[key], value)
-        else
-          hash1[key] = value
-        end
-      end 
+        hash1[key] = if hash1.key?(value) && hash1[key].is_a?(Hash) && value.is_a?(Hash)
+                       deep_merge(hash1[key], value)
+                     else
+                       value
+                     end
+      end
 
       hash1
     end
