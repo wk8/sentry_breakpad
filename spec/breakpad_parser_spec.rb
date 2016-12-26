@@ -93,7 +93,7 @@ describe SentryBreakpad::BreakpadParser do
             { 'filename' => 'unknown', 'function' => "ETClient.exe!QString::`scalar deleting destructor'(unsigned int)" },
             { 'filename' => 'qstring.h', 'function' => 'ETClient.exe!QString::~QString()', 'lineno' => 992 }
           ]
-          }
+        }
       }
     end
     # rubocop:enable Metrics/LineLength
