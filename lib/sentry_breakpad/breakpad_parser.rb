@@ -73,6 +73,14 @@ module SentryBreakpad
     #                   6.1.7601 Service Pack 1
     def parse_operating_system(lines)
       parse_indented_section(lines, 'Operating system:', 'os')
+
+      if @tags['os']
+        @extra[:server] ||= {}
+        @extra[:server][:os] = {
+          name: @tags['os'],
+          version: @tags['os_full']
+        }
+      end
     end
 
     # Parses something of the form
@@ -113,7 +121,7 @@ module SentryBreakpad
     def parse_crash_address(line)
       address = remove_prefix(line, 'Crash address:')
 
-      @extra['crash_address'] = address
+      @extra[:crash_address] = address
     end
 
     def remove_prefix(line, prefix)
@@ -209,7 +217,7 @@ module SentryBreakpad
       # sentry wants their stacktrace with the oldest frame first
       @crashed_thread_stacktrace = stacktrace.reverse
 
-      @extra['crashed_thread_id'] = thread_id
+      @extra[:crashed_thread_id] = thread_id
     end
 
     MODULE_LINE_REGEX = /0x[0-9a-f]+\s+-\s+0x[0-9a-f]+\s+([^ ]+)\s+([^ ]+)/

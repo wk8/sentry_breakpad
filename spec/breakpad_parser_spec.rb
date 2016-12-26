@@ -8,6 +8,16 @@ describe SentryBreakpad::BreakpadParser do
     let(:expected_hash) do
       {
         culprit: 'ETClient.exe!QString::~QString()',
+        extra: {
+          server: {
+            os: {
+              name: 'Windows NT',
+              version: 'Windows NT - 6.1.7601 Service Pack 1'
+            }
+          },
+          crash_address: '0xfffffffffee1dead',
+          crashed_thread_id: 0
+        },
         level: Raven::Event::LOG_LEVELS['fatal'],
         logger: 'breakpad',
         message: 'EXCEPTION_ACCESS_VIOLATION_READ at ETClient.exe!QString::~QString() (qstring.h : 992)',
@@ -83,8 +93,7 @@ describe SentryBreakpad::BreakpadParser do
             { 'filename' => 'unknown', 'function' => "ETClient.exe!QString::`scalar deleting destructor'(unsigned int)" },
             { 'filename' => 'qstring.h', 'function' => 'ETClient.exe!QString::~QString()', 'lineno' => 992 }
           ]
-        }
-        # wk: 'po'
+          }
       }
     end
     # rubocop:enable Metrics/LineLength
