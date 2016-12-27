@@ -22,7 +22,7 @@ module SentryBreakpad
 
     # TODO wkpo unit test on the extra_info thing
     def raven_event(extra_info = {})
-      hash = deep_merge(raven_event_base_hash, extra_info)
+      hash = HashHelper.deep_merge!(base_event_hash, HashHelper.deep_symbolize_keys!(extra_info))
       Raven::Event.new(hash).tap do |event|
         unless @crashed_thread_stacktrace.empty?
           event[:stacktrace] = { frames: @crashed_thread_stacktrace }
@@ -32,15 +32,15 @@ module SentryBreakpad
 
   private
 
-    def raven_event_base_hash
+    def base_event_hash
       {
-        'message' => @message,
-        'tags'    => @tags,
-        'culprit' => @culprit,
-        'modules' => @modules,
-        'extra'   => @extra,
-        'level'   => 'fatal',
-        'logger'  => 'breakpad'
+        message: @message,
+        tags:    @tags,
+        culprit: @culprit,
+        modules: @modules,
+        extra:   @extra,
+        level:   'fatal',
+        logger:  'breakpad'
       }
     end
 
@@ -73,13 +73,13 @@ module SentryBreakpad
     # Operating system: Windows NT
     #                   6.1.7601 Service Pack 1
     def parse_operating_system(lines)
-      parse_indented_section(lines, 'Operating system:', 'os')
+      parse_indented_section(lines, 'Operating system:', :os)
 
-      if @tags['os']
+      if @tags[:os]
         @extra[:server] ||= {}
         @extra[:server][:os] = {
-          name: @tags['os'],
-          version: @tags['os_full']
+          name: @tags[:os],
+          version: @tags[:os_full]
         }
       end
     end
@@ -89,7 +89,7 @@ module SentryBreakpad
     #      GenuineIntel family 6 model 70 stepping 1
     #      4 CPUs
     def parse_cpu(lines)
-      parse_indented_section(lines, 'CPU:', 'cpu')
+      parse_indented_section(lines, 'CPU:', :cpu)
     end
 
     def parse_indented_section(lines, prefix, tag_name)
@@ -101,7 +101,7 @@ module SentryBreakpad
       end
 
       @tags[tag_name] = short
-      @tags["#{tag_name}_full"] = long
+      @tags["#{tag_name}_full".to_sym] = long
     end
 
     # Parses a single line like
@@ -207,9 +207,9 @@ module SentryBreakpad
       parse_culprit_and_message(function, match[3]) if frame_nb.to_i == 0
 
       {
-        'filename' => filename,
-        'function' => function
-      }.tap { |frame| frame['lineno'] = lineno.to_i if lineno }
+        filename: filename,
+        function: function
+      }.tap { |frame| frame[:lineno] = lineno.to_i if lineno }
     end
 
     def parse_culprit_and_message(function, file_name_and_lineno)
@@ -306,20 +306,6 @@ module SentryBreakpad
         match = regex.match(line)
         yield(match) if match
       end
-    end
-
-    # merges hash2 into hash1, recursively
-    # wish ActiveSupport was around...
-    def deep_merge(hash1, hash2)
-      hash2.each do |key, value|
-        hash1[key] = if hash1.key?(value) && hash1[key].is_a?(Hash) && value.is_a?(Hash)
-                       deep_merge(hash1[key], value)
-                     else
-                       value
-                     end
-      end
-
-      hash1
     end
   end
 end

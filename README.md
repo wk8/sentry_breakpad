@@ -139,7 +139,7 @@ SentryBreakpad.send_from_file('/path/to/report', {
 ```
 
 The exhaustive list of all the extra information that can be passed can be found
-at https://github.com/getsentry/raven-ruby/blob/0.15.3/lib/raven/event.rb#L31-L49.
+at https://github.com/getsentry/raven-ruby/blob/0.15.3/lib/raven/event.rb#L31-L49. # TODO wkpo pas up to date ca
 
 Please note that all of the above assumes that `Raven` has been properly configured
 (we use `Raven.client` to send the generated events)
