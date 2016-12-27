@@ -1,7 +1,5 @@
 require 'raven'
 
-# TODO wkpo https://docs.sentry.io/clientdev/interfaces/threads/
-
 module SentryBreakpad
   # parses a breakpad report and turns it into a Raven event
   class BreakpadParser # rubocop:disable Metrics/ClassLength
@@ -15,6 +13,7 @@ module SentryBreakpad
       @message = nil
       @tags = {}
       @crashed_thread_stacktrace = []
+      @other_threads_stacktraces = {}
       @culprit = nil
       @modules = {}
       @extra = {}
@@ -60,8 +59,8 @@ module SentryBreakpad
           parse_crash_reason(lines.pop)
         when /^Crash address:/
           parse_crash_address(lines.pop)
-        when /^Thread ([0-9]+) \(crashed\)/
-          parse_crashed_thread_stacktrace(lines, Regexp.last_match[1].to_i)
+        when /^Thread ([0-9]+)(\s+\(crashed\))?/
+          parse_thread_stacktrace(lines, Regexp.last_match[1].to_i, !Regexp.last_match[2].nil?)
         when /^Loaded modules:/
           parse_loaded_modules(lines)
         else
@@ -184,28 +183,33 @@ module SentryBreakpad
     #     eip = 0x015bb068   esp = 0x0018d690   ebp = 0x0018d7f8
     #     Found by: call frame info
     # rubocop:enable Metrics/LineLength
-    def parse_crashed_thread_stacktrace(lines, thread_id)
+    def parse_thread_stacktrace(lines, thread_id, crashed_thread)
       # remove the 1st line
       lines.pop
 
       stacktrace = []
       process_matching_lines(lines, BACKTRACE_LINE_REGEX) do |match|
-        stacktrace << parse_crashed_thread_stacktrace_line(match)
+        stacktrace << parse_crashed_thread_stacktrace_line(match, crashed_thread)
       end
 
       # sentry wants their stacktrace with the oldest frame first
-      @crashed_thread_stacktrace = stacktrace.reverse
+      stacktrace = stacktrace.reverse
 
-      @extra[:crashed_thread_id] = thread_id
+      if crashed_thread
+        @crashed_thread_stacktrace = stacktrace
+        @extra[:crashed_thread_id] = thread_id
+      else
+        @other_threads_stacktraces[thread_id] = stacktrace
+      end
     end
 
-    def parse_crashed_thread_stacktrace_line(match)
+    def parse_crashed_thread_stacktrace_line(match, crashed_thread)
       frame_nb = match[1]
       function = match[2]
       filename = match[4] || 'unknown'
       lineno   = match[5]
 
-      parse_culprit_and_message(function, match[3]) if frame_nb.to_i == 0
+      parse_culprit_and_message(function, match[3]) if crashed_thread && frame_nb.to_i == 0
 
       {
         filename: filename,
