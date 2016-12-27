@@ -13,6 +13,11 @@ module SentryBreakpad
       @message = nil
       @tags = {}
       @crashed_thread_stacktrace = []
+      # TODO: this is not leveraged yet, because the ruby-raven gem doesn't
+      # support this yet...
+      # come back to integrating other threads' stacktraces when
+      # https://github.com/getsentry/raven-ruby/issues/551
+      # is resolved
       @other_threads_stacktraces = {}
       @culprit = nil
       @modules = {}
@@ -183,19 +188,19 @@ module SentryBreakpad
     #     eip = 0x015bb068   esp = 0x0018d690   ebp = 0x0018d7f8
     #     Found by: call frame info
     # rubocop:enable Metrics/LineLength
-    def parse_thread_stacktrace(lines, thread_id, crashed_thread)
+    def parse_thread_stacktrace(lines, thread_id, is_crashed_thread)
       # remove the 1st line
       lines.pop
 
       stacktrace = []
       process_matching_lines(lines, BACKTRACE_LINE_REGEX) do |match|
-        stacktrace << parse_crashed_thread_stacktrace_line(match, crashed_thread)
+        stacktrace << parse_crashed_thread_stacktrace_line(match, is_crashed_thread)
       end
 
       # sentry wants their stacktrace with the oldest frame first
       stacktrace = stacktrace.reverse
 
-      if crashed_thread
+      if is_crashed_thread
         @crashed_thread_stacktrace = stacktrace
         @extra[:crashed_thread_id] = thread_id
       else
@@ -203,13 +208,13 @@ module SentryBreakpad
       end
     end
 
-    def parse_crashed_thread_stacktrace_line(match, crashed_thread)
+    def parse_crashed_thread_stacktrace_line(match, is_crashed_thread)
       frame_nb = match[1]
       function = match[2]
       filename = match[4] || 'unknown'
       lineno   = match[5]
 
-      parse_culprit_and_message(function, match[3]) if crashed_thread && frame_nb.to_i == 0
+      parse_culprit_and_message(function, match[3]) if is_crashed_thread && frame_nb.to_i == 0
 
       {
         filename: filename,
