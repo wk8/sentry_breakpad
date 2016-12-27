@@ -1,63 +1,59 @@
 require 'raven'
 
 module SentryBreakpad
-  # parses a breakpad report
-  class BreakpadParser
+  # parses a breakpad report and turns it into a Raven event
+  class BreakpadParser # rubocop:disable Metrics/ClassLength
     def self.from_file(file_path)
-      new(File.open(file_path).read)
+      new(File.read(file_path))
     end
 
     def initialize(breakpad_report_content)
       @breakpad_report_content = breakpad_report_content
-      @parsed = false
 
       @message = nil
       @tags = {}
       @crashed_thread_stacktrace = []
+      # TODO: this is not leveraged yet, because the ruby-raven gem doesn't
+      # support this yet...
+      # come back to integrating other threads' stacktraces when
+      # https://github.com/getsentry/raven-ruby/issues/551
+      # is resolved
+      @other_threads_stacktraces = {}
       @culprit = nil
       @modules = {}
       @extra = {}
+
+      parse!
     end
 
-    def raven_event(extra_info = {}, include_whole_report = true)
-      hash = deep_merge(raven_event_hash(include_whole_report), extra_info)
-      Raven::Event.new(hash)
-    end
-
-    def raven_event_hash(include_whole_report = true)
-      parse
-
-      extra = if include_whole_report
-        @extra.merge({'raw_breakpad_report' => @breakpad_report_content})
-      else
-        @extra
+    def raven_event(extra_info = {})
+      hash = HashHelper.deep_merge!(base_event_hash, HashHelper.deep_symbolize_keys!(extra_info))
+      Raven::Event.new(hash).tap do |event|
+        unless @crashed_thread_stacktrace.empty?
+          event[:stacktrace] = { frames: @crashed_thread_stacktrace }
+        end
       end
-
-      {
-        'message'    => @message,
-        'tags'       => @tags,
-        'culprit'    => @culprit,
-        'modules'    => @modules,
-        'extra'      => extra,
-        'level'      => 'fatal',
-        'logger'     => 'breakpad',
-        'interfaces' => {
-          'stacktrace' => {
-            'frames' => @crashed_thread_stacktrace
-          }
-        }
-      }
     end
 
   private
 
-    def parse
-      return if @parsed
+    def base_event_hash
+      {
+        message: @message,
+        tags:    @tags,
+        culprit: @culprit,
+        modules: @modules,
+        extra:   @extra,
+        level:   'fatal',
+        logger:  'breakpad'
+      }
+    end
 
+    def parse!
       parse_lines(@breakpad_report_content.split("\n").reverse!)
     end
 
-    def parse_lines(lines)
+    def parse_lines(lines) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/AbcSize, Metrics/MethodLength, Metrics/LineLength
       until lines.empty?
         case lines.last
         when /^Operating system:/
@@ -68,8 +64,8 @@ module SentryBreakpad
           parse_crash_reason(lines.pop)
         when /^Crash address:/
           parse_crash_address(lines.pop)
-        when /^Thread ([0-9]+) \(crashed\)/
-          parse_crashed_thread_stacktrace(lines, $1.to_i)
+        when /^Thread ([0-9]+)(\s+\(crashed\))?/
+          parse_thread_stacktrace(lines, Regexp.last_match[1].to_i, !Regexp.last_match[2].nil?)
         when /^Loaded modules:/
           parse_loaded_modules(lines)
         else
@@ -82,7 +78,15 @@ module SentryBreakpad
     # Operating system: Windows NT
     #                   6.1.7601 Service Pack 1
     def parse_operating_system(lines)
-      parse_indented_section(lines, 'Operating system:', 'os')
+      parse_indented_section(lines, 'Operating system:', :os)
+
+      if @tags[:os]
+        @extra[:server] ||= {}
+        @extra[:server][:os] = {
+          name: @tags[:os],
+          version: @tags[:os_full]
+        }
+      end
     end
 
     # Parses something of the form
@@ -90,7 +94,7 @@ module SentryBreakpad
     #      GenuineIntel family 6 model 70 stepping 1
     #      4 CPUs
     def parse_cpu(lines)
-      parse_indented_section(lines, 'CPU:', 'cpu')
+      parse_indented_section(lines, 'CPU:', :cpu)
     end
 
     def parse_indented_section(lines, prefix, tag_name)
@@ -102,7 +106,7 @@ module SentryBreakpad
       end
 
       @tags[tag_name] = short
-      @tags["#{tag_name}_full"] = long
+      @tags["#{tag_name}_full".to_sym] = long
     end
 
     # Parses a single line like
@@ -110,12 +114,12 @@ module SentryBreakpad
     def parse_crash_reason(line)
       reason = remove_prefix(line, 'Crash reason:')
 
-      if @message.nil?
-        @message = reason
-      else
-        # we parse the crashed thread first
-        @message = "#{reason} at #{@message}"
-      end
+      @message = if @message.nil?
+                   reason
+                 else
+                   # we parse the crashed thread first
+                   "#{reason} at #{@message}"
+                 end
     end
 
     # Parses a single line like
@@ -123,7 +127,7 @@ module SentryBreakpad
     def parse_crash_address(line)
       address = remove_prefix(line, 'Crash address:')
 
-      @extra['crash_address'] = address
+      @extra[:crash_address] = address
     end
 
     def remove_prefix(line, prefix)
@@ -131,8 +135,9 @@ module SentryBreakpad
       line.strip
     end
 
-    BACKTRACE_LINE_REGEX = /^\s*([0-9]+)\s+(.*)\s+(?:\[(([^ ]+)\s+:\s+([0-9]+))\s+\+\s+0x[0-9a-f]+\]|\+\s+0x[0-9a-f]+)\s*$/
+    BACKTRACE_LINE_REGEX = /^\s*([0-9]+)\s+(.*)\s+(?:\[(([^ ]+)\s+:\s+([0-9]+))\s+\+\s+0x[0-9a-f]+\]|\+\s+0x[0-9a-f]+)\s*$/ # rubocop:disable Metrics/LineLength
 
+    # rubocop:disable Metrics/LineLength
     # Parses something of the form
     # Thread 0 (crashed)
     #  0  ETClient.exe!QString::~QString() [qstring.h : 992 + 0xa]
@@ -182,48 +187,58 @@ module SentryBreakpad
     # 14  ETClient.exe!WinMain + 0x21358
     #     eip = 0x015bb068   esp = 0x0018d690   ebp = 0x0018d7f8
     #     Found by: call frame info
-    def parse_crashed_thread_stacktrace(lines, thread_id)
+    # rubocop:enable Metrics/LineLength
+    def parse_thread_stacktrace(lines, thread_id, is_crashed_thread)
       # remove the 1st line
       lines.pop
 
       stacktrace = []
       process_matching_lines(lines, BACKTRACE_LINE_REGEX) do |match|
-        frame_nb = match[1]
-        function = match[2]
-        filename = match[4] || 'unknown'
-        lineno   = match[5]
-
-        frame = {
-          'filename' => filename,
-          'function' => function
-        }
-        frame['lineno'] = lineno.to_i if lineno
-
-        stacktrace << frame
-
-        if frame_nb.to_i == 0
-          @culprit = function
-
-          message_tail = function
-          message_tail += " (#{match[3]})" if match[3]
-
-          if @message.nil?
-            @message = message_tail
-          else
-            # already parsed the crash reason
-            @message += " at #{message_tail}"
-          end
-        end
+        stacktrace << parse_crashed_thread_stacktrace_line(match, is_crashed_thread)
       end
 
       # sentry wants their stacktrace with the oldest frame first
-      @crashed_thread_stacktrace = stacktrace.reverse
+      stacktrace = stacktrace.reverse
 
-      @extra['crashed_thread_id'] = thread_id
+      if is_crashed_thread
+        @crashed_thread_stacktrace = stacktrace
+        @extra[:crashed_thread_id] = thread_id
+      else
+        @other_threads_stacktraces[thread_id] = stacktrace
+      end
+    end
+
+    def parse_crashed_thread_stacktrace_line(match, is_crashed_thread)
+      frame_nb = match[1]
+      function = match[2]
+      filename = match[4] || 'unknown'
+      lineno   = match[5]
+
+      parse_culprit_and_message(function, match[3]) if is_crashed_thread && frame_nb.to_i == 0
+
+      {
+        filename: filename,
+        function: function
+      }.tap { |frame| frame[:lineno] = lineno.to_i if lineno }
+    end
+
+    def parse_culprit_and_message(function, file_name_and_lineno)
+      @culprit = function
+
+      message_tail = function
+      message_tail += " (#{file_name_and_lineno})" if file_name_and_lineno
+
+      if @message.nil?
+        @message = message_tail
+      else
+        # already parsed the crash reason
+        @message += " at #{message_tail}"
+      end
     end
 
     MODULE_LINE_REGEX = /0x[0-9a-f]+\s+-\s+0x[0-9a-f]+\s+([^ ]+)\s+([^ ]+)/
 
+    # rubocop:disable Metrics/LineLength
     # Parses something of the form
     # Loaded modules:
     # 0x00d70000 - 0x01b39fff  ETClient.exe  ???  (main)
@@ -278,6 +293,7 @@ module SentryBreakpad
     # 0x76f90000 - 0x76feffff  imm32.dll  6.1.7601.17514
     # 0x76ff0000 - 0x77016fff  cfgmgr32.dll  6.1.7601.17621
     # 0x77420000 - 0x7759ffff  ntdll.dll  6.1.7601.19110  (WARNING: No symbols, wntdll.pdb, 992AA396746C4D548F7F497DD63B4EEC2)
+    # rubocop:enable Metrics/LineLength
     def parse_loaded_modules(lines)
       # remove the 1st line
       lines.pop
@@ -290,7 +306,7 @@ module SentryBreakpad
       end
     end
 
-    def process_matching_lines(lines, regex, &blk)
+    def process_matching_lines(lines, regex, &_blk)
       loop do
         line = lines.pop
         line.strip! if line
@@ -300,20 +316,6 @@ module SentryBreakpad
         match = regex.match(line)
         yield(match) if match
       end
-    end
-
-    # merges hash2 into hash1, recursively
-    # wish ActiveSupport was around...
-    def deep_merge(hash1, hash2)
-      hash2.each do |key, value|
-        if hash1.key?(value) && hash1[key].is_a?(Hash) && value.is_a?(Hash)
-          hash1[key] = deep_merge(hash1[key], value)
-        else
-          hash1[key] = value
-        end
-      end 
-
-      hash1
     end
   end
 end

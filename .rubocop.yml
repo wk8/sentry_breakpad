@@ -1,0 +1,14 @@
+AllCops:
+  DisplayCopNames: true
+
+Metrics/LineLength:
+  Max: 100
+
+Metrics/MethodLength:
+  Max: 15
+
+Documentation:
+  Enabled: false
+
+Style/AccessModifierIndentation:
+  EnforcedStyle: outdent

@@ -1,4 +1,14 @@
 language: ruby
+cache: bundler
 rvm:
-  - 2.2.2
-before_install: gem install bundler -v 1.10.6
+  - 1.9
+  - 1.9.3
+  - 2.0
+  - 2.1
+  - 2.2
+  - 2.3.3
+  - 2.4.0
+before_install: gem update --remote bundler
+script:
+  - bundle exec rspec
+  - bundle exec rubocop -c .rubocop.yml
