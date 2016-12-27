@@ -1,3 +1,5 @@
+[![Build Status](https://api.travis-ci.org/wk8/sentry_breakpad.svg?branch=master)](https://travis-ci.org/wk8/sentry_breakpad)
+
 # SentryBreakpad
 
 So you've integrated [Google
@@ -139,7 +141,6 @@ SentryBreakpad.send_from_file('/path/to/report', {
 ```
 
 The exhaustive list of all the extra information that can be passed can be found
-at https://github.com/getsentry/raven-ruby/blob/0.15.3/lib/raven/event.rb#L31-L49. # TODO wkpo pas up to date ca
 
 Please note that all of the above assumes that `Raven` has been properly configured
 (we use `Raven.client` to send the generated events)
@@ -153,7 +154,6 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/wk8/sentry_breakpad.
-
 
 ## License
 
