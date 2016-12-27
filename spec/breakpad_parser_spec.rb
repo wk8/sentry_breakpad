@@ -110,28 +110,31 @@ describe SentryBreakpad::BreakpadParser do
       expect(parser.raven_event.to_hash).to include(expected_hash)
     end
 
-    # context 'when passed some extra info' do
-    #   let(:extra_info) do
-    #     {
-    #       'release' => '1.2.3',
-    #       'extra' => {
-    #         'started_at_utc' => '2016-12-27T01:21:22+00:00',
-    #         'client_logs'    => "log line 1\nlog line 2\nlogline 3",
-    #         'daemon_logs'    => "log line 4\nlog line 5\nlogline 6"
-    #       },
-    #       'tags' => {
-    #         'app_name'   => 'client',
-    #         'build_type' => 'release',
-    #         'client_id'  => 12,
-    #         'user_id'    => 28
-    #       }
-    #     }
-    #   end
-    #
-    #   it 'includes it in the event' do
-    #     expect(parser.raven_event(extra_info).to_hash).to include(expected_hash)
-    #   end
-    # end
+    context 'when passed some extra info' do
+      let(:extra_info) do
+        {
+          'release' => '1.2.3',
+          'extra' => {
+            'started_at_utc' => '2016-12-27T01:21:22+00:00',
+            'client_logs'    => "log line 1\nlog line 2\nlogline 3",
+            'daemon_logs'    => "log line 4\nlog line 5\nlogline 6"
+          },
+          'tags' => {
+            'app_name'   => 'client',
+            'build_type' => 'release',
+            'client_id'  => 12,
+            'user_id'    => 28
+          }
+        }
+      end
+
+      it 'includes it in the event' do
+        sym_keys_extra_info = SentryBreakpad::HashHelper.deep_symbolize_keys!(extra_info)
+        expected_hash_with_extra_info = SentryBreakpad::HashHelper.deep_merge!(expected_hash,
+                                                                               sym_keys_extra_info)
+        expect(parser.raven_event(extra_info).to_hash).to include(expected_hash_with_extra_info)
+      end
+    end
   end
 
   describe '.from_file' do

@@ -1,5 +1,7 @@
 require 'raven'
 
+# TODO wkpo https://docs.sentry.io/clientdev/interfaces/threads/
+
 module SentryBreakpad
   # parses a breakpad report and turns it into a Raven event
   class BreakpadParser # rubocop:disable Metrics/ClassLength
@@ -20,7 +22,6 @@ module SentryBreakpad
       parse!
     end
 
-    # TODO wkpo unit test on the extra_info thing
     def raven_event(extra_info = {})
       hash = HashHelper.deep_merge!(base_event_hash, HashHelper.deep_symbolize_keys!(extra_info))
       Raven::Event.new(hash).tap do |event|
